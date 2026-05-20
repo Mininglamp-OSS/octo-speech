@@ -116,6 +116,28 @@ func TestLoadFromEnv_CustomValues(t *testing.T) {
 	}
 }
 
+func TestLoadFromEnv_FeedbackURL_Default(t *testing.T) {
+	os.Clearenv()
+
+	cfg := LoadFromEnv(nil)
+
+	if cfg.FeedbackURL != "" {
+		t.Errorf("expected empty feedback URL by default, got %q", cfg.FeedbackURL)
+	}
+}
+
+func TestLoadFromEnv_FeedbackURL_Set(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("VOICE_FEEDBACK_URL", "https://example.com/feedback")
+	defer os.Clearenv()
+
+	cfg := LoadFromEnv(nil)
+
+	if cfg.FeedbackURL != "https://example.com/feedback" {
+		t.Errorf("expected feedback URL 'https://example.com/feedback', got %q", cfg.FeedbackURL)
+	}
+}
+
 func TestLoadFromEnv_GPTForceAppend(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("VOICE_ENGINE", "gpt")

@@ -30,7 +30,7 @@ func (h *ConfigHandler) Handle(c *gin.Context) {
 
 	localCfg := h.localCfgStore.Query(appID, subjectID, scopeType, scopeID)
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"enabled":              true,
 		"max_duration":         h.cfg.MaxDuration,
 		"max_file_size":        h.cfg.MaxFileSize,
@@ -40,5 +40,11 @@ func (h *ConfigHandler) Handle(c *gin.Context) {
 		"local_timeout_ms":     localCfg.TimeoutMs,
 		"local_probe_url":      localCfg.ProbeURL,
 		"local_transcribe_url": localCfg.TranscribeURL,
-	})
+	}
+
+	if h.cfg.FeedbackURL != "" {
+		resp["feedback_url"] = h.cfg.FeedbackURL
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

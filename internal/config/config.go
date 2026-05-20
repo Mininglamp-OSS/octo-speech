@@ -76,7 +76,8 @@ type Config struct {
 	ASRLogBufferSize   int
 	ASRLogRetentionDays int
 
-	Hostname string
+	Hostname    string
+	FeedbackURL string
 }
 
 func LoadFromEnv(logger *zap.Logger) *Config {
@@ -250,6 +251,8 @@ func LoadFromEnv(logger *zap.Logger) *Config {
 	}
 
 	cfg.ASRLogDir = os.Getenv("ASR_LOG_DIR")
+
+	cfg.FeedbackURL = os.Getenv("VOICE_FEEDBACK_URL")
 
 	if v := os.Getenv("ASR_LOG_BUFFER_SIZE"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {

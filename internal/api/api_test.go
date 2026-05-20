@@ -216,6 +216,75 @@ func TestConfigHandler(t *testing.T) {
 	}
 }
 
+func TestConfigHandler_FeedbackURL_Present(t *testing.T) {
+	cfg := &config.Config{
+		MaxDuration:        60,
+		MaxFileSize:        3145728,
+		Engine:             config.EngineGemini,
+		EditMode:           "edit",
+		LocalEnabled:       true,
+		LocalTimeoutMs:     10000,
+		LocalProbeURL:      "http://localhost:8787/",
+		LocalTranscribeURL: "http://localhost:8787/v1/voice/transcribe",
+		FeedbackURL:        "https://example.com/feedback",
+	}
+
+	localStore := store.NewLocalConfigStore(nil, cfg)
+	h := NewConfigHandler(cfg, localStore)
+
+	r := gin.New()
+	r.GET("/v1/speech/config", h.Handle)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/v1/speech/config", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	if resp["feedback_url"] != "https://example.com/feedback" {
+		t.Errorf("expected feedback_url 'https://example.com/feedback', got %v", resp["feedback_url"])
+	}
+}
+
+func TestConfigHandler_FeedbackURL_Absent(t *testing.T) {
+	cfg := &config.Config{
+		MaxDuration:        60,
+		MaxFileSize:        3145728,
+		Engine:             config.EngineGemini,
+		EditMode:           "edit",
+		LocalEnabled:       true,
+		LocalTimeoutMs:     10000,
+		LocalProbeURL:      "http://localhost:8787/",
+		LocalTranscribeURL: "http://localhost:8787/v1/voice/transcribe",
+	}
+
+	localStore := store.NewLocalConfigStore(nil, cfg)
+	h := NewConfigHandler(cfg, localStore)
+
+	r := gin.New()
+	r.GET("/v1/speech/config", h.Handle)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/v1/speech/config", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	if _, exists := resp["feedback_url"]; exists {
+		t.Errorf("expected feedback_url to be absent, but got %v", resp["feedback_url"])
+	}
+}
+
 func TestTranscribeHandler_MissingAudio(t *testing.T) {
 	cfg := &config.Config{
 		MaxFileSize:  3145728,
