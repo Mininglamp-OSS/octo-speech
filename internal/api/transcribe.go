@@ -90,10 +90,10 @@ func (h *TranscribeHandler) Handle(c *gin.Context) {
 	modelParam := c.PostForm("model")
 	emotionParam := c.PostForm("emotion_emoji")
 
-	if channelType != "" && channelType != "dm" && channelType != "group" && channelType != "1" && channelType != "2" {
+	if channelType != "" && channelType != "dm" && channelType != "group" && channelType != "thread" && channelType != "1" && channelType != "2" && channelType != "5" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":     http.StatusBadRequest,
-			"msg":        "invalid channel_type, expected: dm, group, 1, 2",
+			"msg":        "invalid channel_type, expected: dm, group, thread, 1, 2, 5",
 			"request_id": requestID,
 		})
 		return

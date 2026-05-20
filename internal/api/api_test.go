@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Mininglamp-OSS/octo-speech/internal/config"
+	"github.com/Mininglamp-OSS/octo-speech/internal/service"
 	"github.com/Mininglamp-OSS/octo-speech/internal/store"
 )
 
@@ -620,8 +622,156 @@ func TestTranscribeHandler_InvalidChannelType(t *testing.T) {
 
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp["msg"] != "invalid channel_type, expected: dm, group, 1, 2" {
+	if resp["msg"] != "invalid channel_type, expected: dm, group, thread, 1, 2, 5" {
 		t.Errorf("unexpected msg: %v", resp["msg"])
+	}
+}
+
+func TestTranscribeHandler_ChannelTypeThread(t *testing.T) {
+	cfg := &config.Config{
+		MaxFileSize:            3145728,
+		EmotionEmoji:           true,
+		MaxContextTextLength:   5000,
+		MaxChatContextLength:   20000,
+		MaxVoiceContextLength:  10000,
+		MaxMemberContextLength: 5000,
+	}
+
+	h := NewTranscribeHandler(nil, cfg, nil, nil)
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		c.Set("app_id", "test-app")
+		c.Next()
+	})
+	r.POST("/v1/speech/transcribe", h.Handle)
+
+	tests := []struct {
+		name        string
+		channelType string
+	}{
+		{"numeric 5", "5"},
+		{"string thread", "thread"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+			part, _ := writer.CreateFormFile("audio", "test.wav")
+			part.Write([]byte("fake audio"))
+			writer.WriteField("channel_type", tt.channelType)
+			writer.Close()
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("POST", "/v1/speech/transcribe", &buf)
+			req.Header.Set("Content-Type", writer.FormDataContentType())
+			r.ServeHTTP(w, req)
+
+			if w.Code == http.StatusBadRequest {
+				var resp map[string]interface{}
+				json.Unmarshal(w.Body.Bytes(), &resp)
+				msg, _ := resp["msg"].(string)
+				if strings.Contains(msg, "channel_type") {
+					t.Fatalf("channel_type=%q was rejected by validation: %s", tt.channelType, msg)
+				}
+				t.Fatalf("unexpected 400 for channel_type=%q: %s", tt.channelType, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestTranscribeHandler_ChannelTypeThread_SkipMentionFalse(t *testing.T) {
+	service.ResetPromptsToDefaults()
+
+	tests := []struct {
+		name        string
+		channelType string
+	}{
+		{"string thread", "thread"},
+		{"numeric 5", "5"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedSystem string
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				var req struct {
+					Messages []struct {
+						Role    string `json:"role"`
+						Content json.RawMessage `json:"content"`
+					} `json:"messages"`
+				}
+				json.Unmarshal(body, &req)
+				for _, m := range req.Messages {
+					if m.Role == "system" {
+						var s string
+						json.Unmarshal(m.Content, &s)
+						capturedSystem = s
+					}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"choices": []map[string]interface{}{
+						{"message": map[string]string{"content": "transcribed text"}},
+					},
+				})
+			}))
+			defer backend.Close()
+
+			cfg := &config.Config{
+				MaxFileSize:            3145728,
+				EmotionEmoji:           true,
+				MaxContextTextLength:   5000,
+				MaxChatContextLength:   20000,
+				MaxVoiceContextLength:  10000,
+				MaxMemberContextLength: 5000,
+				Engine:                 config.EngineGemini,
+				Models:                 []string{"test-model"},
+				LiteLLMUrl:             backend.URL,
+				LiteLLMKey:             "test-key",
+				Timeout:                10,
+				TotalTimeout:           15,
+			}
+
+			svc := service.NewTranscribeService(cfg)
+			h := NewTranscribeHandler(svc, cfg, nil, nil)
+
+			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				c.Set("app_id", "test-app")
+				c.Next()
+			})
+			r.POST("/v1/speech/transcribe", h.Handle)
+
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+			part, _ := writer.CreateFormFile("audio", "test.wav")
+			part.Write([]byte("fake audio"))
+			writer.WriteField("channel_type", tt.channelType)
+			writer.Close()
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("POST", "/v1/speech/transcribe", &buf)
+			req.Header.Set("Content-Type", writer.FormDataContentType())
+			r.ServeHTTP(w, req)
+
+			if w.Code == http.StatusBadRequest {
+				t.Fatalf("channel_type=%q rejected by validation: %s", tt.channelType, w.Body.String())
+			}
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			if capturedSystem == "" {
+				t.Fatal("system message was not sent to the backend")
+			}
+			if !strings.Contains(capturedSystem, "@") {
+				t.Errorf("expected mention section in system prompt (skipMention should be false for channel_type=%q), but it was absent", tt.channelType)
+			}
+		})
 	}
 }
 
