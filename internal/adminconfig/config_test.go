@@ -133,3 +133,15 @@ func TestLoadFromEnv_JWTSecretGenerated(t *testing.T) {
 		t.Errorf("expected generated secret to be at least 32 chars, got %d", len(cfg.JWTSecret))
 	}
 }
+
+func TestLoadFromEnv_DBDsnEnriched(t *testing.T) {
+	os.Setenv("SPEECH_DB_DSN", "user:pass@tcp(127.0.0.1:3306)/testdb")
+	defer os.Unsetenv("SPEECH_DB_DSN")
+
+	cfg := LoadFromEnv(zap.NewNop())
+
+	want := "user:pass@tcp(127.0.0.1:3306)/testdb?loc=Local&parseTime=true"
+	if cfg.DBDsn != want {
+		t.Errorf("DBDsn not enriched\n got: %q\nwant: %q", cfg.DBDsn, want)
+	}
+}

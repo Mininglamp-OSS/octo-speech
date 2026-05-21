@@ -86,7 +86,7 @@ func TestLoadFromEnv_CustomValues(t *testing.T) {
 	if cfg.Port != 9090 {
 		t.Errorf("expected port 9090, got %d", cfg.Port)
 	}
-	if cfg.DBDsn != "user:pass@tcp(localhost:3306)/speech?parseTime=true&loc=Local" {
+	if cfg.DBDsn != "user:pass@tcp(localhost:3306)/speech?loc=Local&parseTime=true" {
 		t.Errorf("unexpected DSN: %s", cfg.DBDsn)
 	}
 	if cfg.CacheTTL != 120 {

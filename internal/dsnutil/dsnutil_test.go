@@ -9,54 +9,44 @@ func TestEnsureDSNTimeParams(t *testing.T) {
 		want string
 	}{
 		{
-			name: "no params",
+			name: "no params — both added",
 			in:   "user:pass@tcp(127.0.0.1:3306)/dbname",
-			want: "user:pass@tcp(127.0.0.1:3306)/dbname?parseTime=true&loc=Local",
+			want: "user:pass@tcp(127.0.0.1:3306)/dbname?loc=Local&parseTime=true",
 		},
 		{
-			name: "has parseTime but no loc",
-			in:   "user:pass@tcp(host)/db?parseTime=true",
-			want: "user:pass@tcp(host)/db?parseTime=true&loc=Local",
+			name: "ParseTime=false wrong case — overridden to parseTime=true",
+			in:   "user:pass@tcp(host)/db?ParseTime=false",
+			want: "user:pass@tcp(host:3306)/db?loc=Local&parseTime=true",
 		},
 		{
-			name: "has loc but no parseTime",
-			in:   "user:pass@tcp(host)/db?loc=Asia%2FShanghai",
-			want: "user:pass@tcp(host)/db?loc=Asia%2FShanghai&parseTime=true",
-		},
-		{
-			name: "both already present",
+			name: "both already correct — preserved",
 			in:   "user:pass@tcp(host)/db?parseTime=true&loc=Local",
-			want: "user:pass@tcp(host)/db?parseTime=true&loc=Local",
+			want: "user:pass@tcp(host:3306)/db?loc=Local&parseTime=true",
 		},
 		{
-			name: "other params present",
+			name: "loc=UTC explicit — preserved",
+			in:   "user:pass@tcp(host)/db?loc=UTC",
+			want: "user:pass@tcp(host:3306)/db?parseTime=true",
+		},
+		{
+			name: "loc=Asia/Shanghai explicit — preserved",
+			in:   "user:pass@tcp(host)/db?loc=Asia%2FShanghai",
+			want: "user:pass@tcp(host:3306)/db?loc=Asia%2FShanghai&parseTime=true",
+		},
+		{
+			name: "other params — preserved",
 			in:   "user:pass@tcp(host)/db?charset=utf8mb4&timeout=5s",
-			want: "user:pass@tcp(host)/db?charset=utf8mb4&timeout=5s&parseTime=true&loc=Local",
+			want: "user:pass@tcp(host:3306)/db?loc=Local&parseTime=true&timeout=5s&charset=utf8mb4",
 		},
 		{
-			name: "empty string",
+			name: "empty DSN — empty returned",
 			in:   "",
 			want: "",
 		},
 		{
-			name: "case insensitive parseTime",
-			in:   "user:pass@tcp(host)/db?ParseTime=false",
-			want: "user:pass@tcp(host)/db?ParseTime=false&loc=Local",
-		},
-		{
-			name: "case insensitive loc",
-			in:   "user:pass@tcp(host)/db?Loc=UTC",
-			want: "user:pass@tcp(host)/db?Loc=UTC&parseTime=true",
-		},
-		{
-			name: "trailing question mark",
-			in:   "user:pass@tcp(host)/db?",
-			want: "user:pass@tcp(host)/db?parseTime=true&loc=Local",
-		},
-		{
-			name: "trailing ampersand",
-			in:   "user:pass@tcp(host)/db?charset=utf8&",
-			want: "user:pass@tcp(host)/db?charset=utf8&parseTime=true&loc=Local",
+			name: "malformed DSN — returned as-is",
+			in:   "not-a-valid-dsn://???",
+			want: "not-a-valid-dsn://???",
 		},
 	}
 

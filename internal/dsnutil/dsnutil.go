@@ -1,41 +1,44 @@
 package dsnutil
 
-import "strings"
+import (
+	"strings"
+	"time"
+
+	"github.com/go-sql-driver/mysql"
+)
 
 // EnsureDSNTimeParams guarantees that parseTime=true and loc=Local are present
 // in a MySQL DSN so the driver returns time.Time in the local timezone.
+// loc=Local relies on TZ=Asia/Shanghai set in Dockerfile.
 func EnsureDSNTimeParams(dsn string) string {
 	if dsn == "" {
 		return ""
 	}
-
-	var query string
-	if i := strings.IndexByte(dsn, '?'); i >= 0 {
-		query = strings.ToLower(dsn[i+1:])
-	}
-
-	needParseTime := !strings.Contains(query, "parsetime=")
-	needLoc := !strings.Contains(query, "loc=")
-
-	if !needParseTime && !needLoc {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
 		return dsn
 	}
-
-	var params []string
-	if needParseTime {
-		params = append(params, "parseTime=true")
+	cfg.ParseTime = true
+	if !dsnHasParam(dsn, "loc") {
+		cfg.Loc = time.Local
 	}
-	if needLoc {
-		params = append(params, "loc=Local")
-	}
-
-	suffix := strings.Join(params, "&")
-
-	if strings.Contains(dsn, "?") {
-		if strings.HasSuffix(dsn, "?") || strings.HasSuffix(dsn, "&") {
-			return dsn + suffix
+	for k := range cfg.Params {
+		if strings.EqualFold(k, "parsetime") {
+			delete(cfg.Params, k)
 		}
-		return dsn + "&" + suffix
 	}
-	return dsn + "?" + suffix
+	return cfg.FormatDSN()
+}
+
+func dsnHasParam(dsn, key string) bool {
+	i := strings.IndexByte(dsn, '?')
+	if i < 0 {
+		return false
+	}
+	for _, p := range strings.Split(dsn[i+1:], "&") {
+		if k, _, _ := strings.Cut(p, "="); k == key {
+			return true
+		}
+	}
+	return false
 }
