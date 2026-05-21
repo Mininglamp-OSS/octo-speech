@@ -142,6 +142,12 @@ func (s *AppStore) GetByAppID(ctx context.Context, appID string) (*AppRecord, er
 	return &r, nil
 }
 
+func (s *AppStore) invalidateCache() {
+	s.mu.Lock()
+	s.cache = make(map[string]cacheEntry)
+	s.mu.Unlock()
+}
+
 func (s *AppStore) UpdateStatus(ctx context.Context, appID string, status int) error {
 	result, err := s.db.ExecContext(ctx,
 		"UPDATE app_registry SET status = ? WHERE app_id = ?",
@@ -154,6 +160,7 @@ func (s *AppStore) UpdateStatus(ctx context.Context, appID string, status int) e
 	if affected == 0 {
 		return ErrAppNotFound
 	}
+	s.invalidateCache()
 	return nil
 }
 
@@ -169,6 +176,7 @@ func (s *AppStore) UpdateAPIKey(ctx context.Context, appID, newKeyHash string) e
 	if affected == 0 {
 		return ErrAppNotFound
 	}
+	s.invalidateCache()
 	return nil
 }
 
@@ -197,7 +205,11 @@ func (s *AppStore) Delete(ctx context.Context, appID string) error {
 		return ErrAppNotFound
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.invalidateCache()
+	return nil
 }
 
 func (s *AppStore) evictOldest() {

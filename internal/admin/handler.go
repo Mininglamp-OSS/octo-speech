@@ -196,8 +196,24 @@ func (h *Handler) CreateApp(c *gin.Context) {
 	})
 }
 
+func isValidAppID(id string) bool {
+	if len(id) != 20 || id[:4] != "app_" {
+		return false
+	}
+	for _, c := range id[4:] {
+		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+			return false
+		}
+	}
+	return true
+}
+
 func (h *Handler) UpdateStatus(c *gin.Context) {
 	appID := c.Param("app_id")
+	if !isValidAppID(appID) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": 400, "msg": "invalid app_id format"})
+		return
+	}
 
 	var req struct {
 		Status *int `json:"status"`
@@ -249,6 +265,10 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 
 func (h *Handler) DeleteApp(c *gin.Context) {
 	appID := c.Param("app_id")
+	if !isValidAppID(appID) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": 400, "msg": "invalid app_id format"})
+		return
+	}
 
 	app, err := h.appStore.GetByAppID(c.Request.Context(), appID)
 	if err != nil && err != store.ErrAppNotFound {
@@ -283,6 +303,10 @@ func (h *Handler) DeleteApp(c *gin.Context) {
 
 func (h *Handler) ResetKey(c *gin.Context) {
 	appID := c.Param("app_id")
+	if !isValidAppID(appID) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": 400, "msg": "invalid app_id format"})
+		return
+	}
 
 	apiKey, err := GenerateAPIKey()
 	if err != nil {

@@ -209,6 +209,7 @@ func TestHandler_UpdateStatus_Validation(t *testing.T) {
 	})
 	r.PUT("/api/apps/:app_id/status", h.UpdateStatus)
 
+	validAppID := "app_AbCdEfGhIjKlMnOp"
 	tests := []struct {
 		name string
 		body string
@@ -222,7 +223,7 @@ func TestHandler_UpdateStatus_Validation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			req := httptest.NewRequest("PUT", "/api/apps/app_test123/status", strings.NewReader(tt.body))
+			req := httptest.NewRequest("PUT", "/api/apps/"+validAppID+"/status", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			r.ServeHTTP(w, req)
 
@@ -372,5 +373,133 @@ func TestCSRFMiddleware_ConstantTimeCompare(t *testing.T) {
 
 	if w.Code != 403 {
 		t.Errorf("expected 403 for mismatched CSRF tokens, got %d", w.Code)
+	}
+}
+
+func TestIsValidAppID(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"valid", "app_AbCdEfGhIjKlMnOp", true},
+		{"valid all digits", "app_1234567890123456", true},
+		{"valid all lowercase", "app_abcdefghijklmnop", true},
+		{"valid all uppercase", "app_ABCDEFGHIJKLMNOP", true},
+		{"too short", "app_abc", false},
+		{"too long", "app_AbCdEfGhIjKlMnOpQ", false},
+		{"wrong prefix", "xxx_AbCdEfGhIjKlMnOp", false},
+		{"no prefix", "AbCdEfGhIjKlMnOpQrSt", false},
+		{"special chars", "app_AbCdEfGh!jKlMnOp", false},
+		{"newline", "app_AbCdEfGh\njKlMnOp", false},
+		{"control char", "app_AbCdEfGh\x00jKlMnOp", false},
+		{"space", "app_AbCdEfGh IjKlMnO", false},
+		{"underscore in suffix", "app_AbCd_fGhIjKlMnOp", false},
+		{"empty string", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isValidAppID(tt.input)
+			if got != tt.want {
+				t.Errorf("isValidAppID(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandler_UpdateStatus_InvalidAppID(t *testing.T) {
+	h := newTestHandler()
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("username", "admin")
+		c.Next()
+	})
+	r.PUT("/api/apps/:app_id/status", h.UpdateStatus)
+
+	tests := []struct {
+		name  string
+		appID string
+	}{
+		{"too short", "app_short"},
+		{"special chars", "app_AbCdEfGh!jKlMnOp"},
+		{"wrong prefix", "xxx_AbCdEfGhIjKlMnOp"},
+		{"underscore in suffix", "app_AbCd_fGhIjKlMnOp"},
+		{"space in suffix", "app_AbCdEfGh%20KlMnOp"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("PUT", "/api/apps/"+tt.appID+"/status", strings.NewReader(`{"status":1}`))
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(w, req)
+
+			if w.Code != 400 {
+				t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandler_DeleteApp_InvalidAppID(t *testing.T) {
+	h := newTestHandler()
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("username", "admin")
+		c.Next()
+	})
+	r.DELETE("/api/apps/:app_id", h.DeleteApp)
+
+	tests := []struct {
+		name  string
+		appID string
+	}{
+		{"too short", "app_x"},
+		{"special chars", "app_AbCdEfGh!jKlMnOp"},
+		{"wrong length", "app_AbCdEfGhIjKl"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("DELETE", "/api/apps/"+tt.appID, nil)
+			r.ServeHTTP(w, req)
+
+			if w.Code != 400 {
+				t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandler_ResetKey_InvalidAppID(t *testing.T) {
+	h := newTestHandler()
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("username", "admin")
+		c.Next()
+	})
+	r.POST("/api/apps/:app_id/reset-key", h.ResetKey)
+
+	tests := []struct {
+		name  string
+		appID string
+	}{
+		{"special chars", "app_AbCd;DROP_TABLE!"},
+		{"empty suffix", "app_"},
+		{"too long", "app_AbCdEfGhIjKlMnOpQ"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("POST", "/api/apps/"+tt.appID+"/reset-key", nil)
+			r.ServeHTTP(w, req)
+
+			if w.Code != 400 {
+				t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
 	}
 }
