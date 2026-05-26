@@ -27,7 +27,10 @@ func main() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
-	cfg := config.LoadFromEnv(logger)
+	cfg, err := config.LoadFromEnv(logger)
+	if err != nil {
+		logger.Fatal("failed to load configuration", zap.Error(err))
+	}
 	if err := cfg.Validate(); err != nil {
 		logger.Fatal("invalid configuration", zap.Error(err))
 	}

@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -93,7 +94,7 @@ type Config struct {
 	IdleTimeout  time.Duration
 }
 
-func LoadFromEnv(logger *zap.Logger) *Config {
+func LoadFromEnv(logger *zap.Logger) (*Config, error) {
 	models := make([]string, len(defaultModels))
 	copy(models, defaultModels)
 	gptModels := make([]string, len(defaultGPTModels))
@@ -129,7 +130,7 @@ func LoadFromEnv(logger *zap.Logger) *Config {
 
 		ASRLogBufferSize:    defaultLogBufSize,
 		ASRLogRetentionDays: defaultRetention,
-		AllowFeedbackLog:    true,
+		AllowFeedbackLog:    false,
 
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 60 * time.Second,
@@ -280,9 +281,11 @@ func LoadFromEnv(logger *zap.Logger) *Config {
 	cfg.FeedbackURL = os.Getenv("VOICE_FEEDBACK_URL")
 
 	if v := os.Getenv("VOICE_ALLOW_FEEDBACK"); v != "" {
-		if b, err := strconv.ParseBool(v); err == nil {
-			cfg.AllowFeedbackLog = b
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid VOICE_ALLOW_FEEDBACK value %q: %w", v, err)
 		}
+		cfg.AllowFeedbackLog = b
 	}
 
 	if v := os.Getenv("ASR_LOG_BUFFER_SIZE"); v != "" {
@@ -313,7 +316,7 @@ func LoadFromEnv(logger *zap.Logger) *Config {
 		}
 	}
 
-	return cfg
+	return cfg, nil
 }
 
 func (c *Config) Validate() error {

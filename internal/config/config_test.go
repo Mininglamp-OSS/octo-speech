@@ -8,7 +8,10 @@ import (
 func TestLoadFromEnv_Defaults(t *testing.T) {
 	os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.Port != 8780 {
 		t.Errorf("expected port 8780, got %d", cfg.Port)
@@ -61,8 +64,8 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	if len(cfg.Models) != 3 || cfg.Models[0] != "gemini-3.1-pro-preview" {
 		t.Errorf("unexpected default models: %v", cfg.Models)
 	}
-	if !cfg.AllowFeedbackLog {
-		t.Error("expected AllowFeedbackLog true by default")
+	if cfg.AllowFeedbackLog {
+		t.Error("expected AllowFeedbackLog false by default")
 	}
 }
 
@@ -84,7 +87,10 @@ func TestLoadFromEnv_CustomValues(t *testing.T) {
 
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.Port != 9090 {
 		t.Errorf("expected port 9090, got %d", cfg.Port)
@@ -122,7 +128,10 @@ func TestLoadFromEnv_CustomValues(t *testing.T) {
 func TestLoadFromEnv_FeedbackURL_Default(t *testing.T) {
 	os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.FeedbackURL != "" {
 		t.Errorf("expected empty feedback URL by default, got %q", cfg.FeedbackURL)
@@ -134,7 +143,10 @@ func TestLoadFromEnv_FeedbackURL_Set(t *testing.T) {
 	os.Setenv("VOICE_FEEDBACK_URL", "https://example.com/feedback")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.FeedbackURL != "https://example.com/feedback" {
 		t.Errorf("expected feedback URL 'https://example.com/feedback', got %q", cfg.FeedbackURL)
@@ -147,7 +159,10 @@ func TestLoadFromEnv_GPTForceAppend(t *testing.T) {
 	os.Setenv("VOICE_EDIT_MODE", "edit")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if cfg.EditMode != "append" {
 		t.Errorf("expected GPT to force append, got %s", cfg.EditMode)
 	}
@@ -158,7 +173,10 @@ func TestLoadFromEnv_GPTDefaultAppend(t *testing.T) {
 	os.Setenv("VOICE_ENGINE", "gpt")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if cfg.EditMode != "append" {
 		t.Errorf("expected GPT default append, got %s", cfg.EditMode)
 	}
@@ -336,10 +354,13 @@ func TestEngineShort(t *testing.T) {
 func TestLoadFromEnv_AllowFeedbackLog_Default(t *testing.T) {
 	os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	if !cfg.AllowFeedbackLog {
-		t.Error("expected AllowFeedbackLog true by default")
+	if cfg.AllowFeedbackLog {
+		t.Error("expected AllowFeedbackLog false by default")
 	}
 }
 
@@ -348,7 +369,10 @@ func TestLoadFromEnv_AllowFeedbackLog_SetFalse(t *testing.T) {
 	os.Setenv("VOICE_ALLOW_FEEDBACK", "false")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.AllowFeedbackLog {
 		t.Error("expected AllowFeedbackLog false when VOICE_ALLOW_FEEDBACK=false")
@@ -360,22 +384,24 @@ func TestLoadFromEnv_AllowFeedbackLog_SetTrue(t *testing.T) {
 	os.Setenv("VOICE_ALLOW_FEEDBACK", "true")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if !cfg.AllowFeedbackLog {
 		t.Error("expected AllowFeedbackLog true when VOICE_ALLOW_FEEDBACK=true")
 	}
 }
 
-func TestLoadFromEnv_AllowFeedbackLog_InvalidIgnored(t *testing.T) {
+func TestLoadFromEnv_AllowFeedbackLog_InvalidReturnsError(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("VOICE_ALLOW_FEEDBACK", "yes")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
-
-	if !cfg.AllowFeedbackLog {
-		t.Error("expected AllowFeedbackLog to remain true when VOICE_ALLOW_FEEDBACK has invalid value")
+	_, err := LoadFromEnv(nil)
+	if err == nil {
+		t.Error("expected error when VOICE_ALLOW_FEEDBACK has invalid value")
 	}
 }
 
@@ -384,7 +410,10 @@ func TestLoadFromEnv_AllowFeedbackLog_Zero(t *testing.T) {
 	os.Setenv("VOICE_ALLOW_FEEDBACK", "0")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.AllowFeedbackLog {
 		t.Error("expected AllowFeedbackLog false when VOICE_ALLOW_FEEDBACK=0")
@@ -396,17 +425,36 @@ func TestLoadFromEnv_AllowFeedbackLog_One(t *testing.T) {
 	os.Setenv("VOICE_ALLOW_FEEDBACK", "1")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if !cfg.AllowFeedbackLog {
 		t.Error("expected AllowFeedbackLog true when VOICE_ALLOW_FEEDBACK=1")
 	}
 }
 
+func TestLoadFromEnv_AllowFeedbackLog_Unset(t *testing.T) {
+	os.Clearenv()
+
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.AllowFeedbackLog {
+		t.Error("expected AllowFeedbackLog false when VOICE_ALLOW_FEEDBACK is not set")
+	}
+}
+
 func TestLoadFromEnv_MaxUploadSize_Default(t *testing.T) {
 	os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.MaxUploadSize != 5*1024*1024 {
 		t.Errorf("expected max upload size 5MB, got %d", cfg.MaxUploadSize)
@@ -418,7 +466,10 @@ func TestLoadFromEnv_MaxUploadSize_FromEnv(t *testing.T) {
 	os.Setenv("VOICE_MAX_UPLOAD_SIZE", "10485760")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.MaxUploadSize != 10485760 {
 		t.Errorf("expected max upload size 10485760, got %d", cfg.MaxUploadSize)
@@ -430,7 +481,10 @@ func TestLoadFromEnv_MaxUploadSize_ZeroFallsBackToDefault(t *testing.T) {
 	os.Setenv("VOICE_MAX_UPLOAD_SIZE", "0")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.MaxUploadSize != 5*1024*1024 {
 		t.Errorf("expected default 5MB when VOICE_MAX_UPLOAD_SIZE=0, got %d", cfg.MaxUploadSize)
@@ -442,7 +496,10 @@ func TestLoadFromEnv_MaxUploadSize_NegativeFallsBackToDefault(t *testing.T) {
 	os.Setenv("VOICE_MAX_UPLOAD_SIZE", "-100")
 	defer os.Clearenv()
 
-	cfg := LoadFromEnv(nil)
+	cfg, err := LoadFromEnv(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if cfg.MaxUploadSize != 5*1024*1024 {
 		t.Errorf("expected default 5MB when VOICE_MAX_UPLOAD_SIZE=-100, got %d", cfg.MaxUploadSize)
