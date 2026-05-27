@@ -13,3 +13,5 @@ Thumbs.db
 
 /admin
 speech
+octo-speech-bin
+Dockerfile.local

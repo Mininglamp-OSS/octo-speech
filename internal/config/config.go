@@ -118,7 +118,7 @@ func LoadFromEnv(logger *zap.Logger) (*Config, error) {
 		QwenModels:   qwenModels,
 
 		EmotionEmoji:       true,
-		LocalEnabled:       true,
+		LocalEnabled:       false,
 		LocalTimeoutMs:     10000,
 		LocalProbeURL:      "http://localhost:8787/",
 		LocalTranscribeURL: "http://localhost:8787/v1/voice/transcribe",

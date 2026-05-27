@@ -82,6 +82,7 @@ func main() {
 	transcribeHandler := api.NewTranscribeHandler(svc, cfg, asrLogger, logger)
 	configHandler := api.NewConfigHandler(cfg, localCfgStore)
 	vocabHandler := api.NewVocabularyHandler(vocabStore)
+	localConfigHandler := api.NewLocalConfigHandler(localCfgStore)
 
 	auth := api.AuthMiddleware(appStore)
 
@@ -93,6 +94,9 @@ func main() {
 		protected.PUT("/vocabularies", vocabHandler.Put)
 		protected.GET("/vocabularies", vocabHandler.Get)
 		protected.DELETE("/vocabularies", vocabHandler.Delete)
+		protected.PUT("/local-config", localConfigHandler.Put)
+		protected.GET("/local-config", localConfigHandler.Get)
+		protected.DELETE("/local-config", localConfigHandler.Delete)
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.Port)

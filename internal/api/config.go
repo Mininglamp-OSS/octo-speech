@@ -28,7 +28,11 @@ func (h *ConfigHandler) Handle(c *gin.Context) {
 		appID, _ = v.(string)
 	}
 
-	localCfg := h.localCfgStore.Query(appID, subjectID, scopeType, scopeID)
+	localCfg, err := h.localCfgStore.Query(appID, subjectID, scopeType, scopeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": http.StatusInternalServerError, "msg": "failed to query local config"})
+		return
+	}
 
 	resp := gin.H{
 		"enabled":              true,

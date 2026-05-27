@@ -37,8 +37,8 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	if !cfg.EmotionEmoji {
 		t.Error("expected emotion emoji true")
 	}
-	if !cfg.LocalEnabled {
-		t.Error("expected local enabled true")
+	if cfg.LocalEnabled {
+		t.Error("expected local enabled false")
 	}
 	if cfg.LocalTimeoutMs != 10000 {
 		t.Errorf("expected local timeout 10000, got %d", cfg.LocalTimeoutMs)

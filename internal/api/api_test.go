@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
 
 	"github.com/Mininglamp-OSS/octo-speech/internal/asrlog"
@@ -1269,5 +1270,512 @@ func TestTranscribeHandler_MaxUploadSize(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp["msg"] != "request body too large" {
 		t.Errorf("unexpected msg: %v", resp["msg"])
+	}
+}
+
+func setupLocalConfigRouter() (*gin.Engine, *LocalConfigHandler) {
+	cfg := &config.Config{
+		LocalEnabled:       false,
+		LocalTimeoutMs:     10000,
+		LocalProbeURL:      "http://localhost:8787/",
+		LocalTranscribeURL: "http://localhost:8787/v1/voice/transcribe",
+	}
+	localStore := store.NewLocalConfigStore(nil, cfg)
+	h := NewLocalConfigHandler(localStore)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("app_id", "test-app")
+		c.Next()
+	})
+	r.PUT("/v1/speech/local-config", h.Put)
+	r.GET("/v1/speech/local-config", h.Get)
+	r.DELETE("/v1/speech/local-config", h.Delete)
+	return r, h
+}
+
+func setupLocalConfigRouterWithMock(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
+	t.Helper()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &config.Config{
+		LocalEnabled:       false,
+		LocalTimeoutMs:     10000,
+		LocalProbeURL:      "http://localhost:8787/",
+		LocalTranscribeURL: "http://localhost:8787/v1/voice/transcribe",
+	}
+	localStore := store.NewLocalConfigStore(db, cfg)
+	h := NewLocalConfigHandler(localStore)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("app_id", "test-app")
+		c.Next()
+	})
+	r.PUT("/v1/speech/local-config", h.Put)
+	r.GET("/v1/speech/local-config", h.Get)
+	r.DELETE("/v1/speech/local-config", h.Delete)
+	return r, mock
+}
+
+func TestLocalConfigHandler_PutValidation(t *testing.T) {
+	r, _ := setupLocalConfigRouter()
+
+	tests := []struct {
+		name string
+		body string
+		want int
+		msg  string
+	}{
+		{
+			"invalid json",
+			`{bad`,
+			400,
+			"invalid request body",
+		},
+		{
+			"missing subject_id",
+			`{"scope_type":"global","scope_id":"default","enabled":true}`,
+			400,
+			"subject_id, scope_type, and scope_id are required",
+		},
+		{
+			"missing scope_type",
+			`{"subject_id":"user1","scope_id":"default","enabled":true}`,
+			400,
+			"subject_id, scope_type, and scope_id are required",
+		},
+		{
+			"missing scope_id",
+			`{"subject_id":"user1","scope_type":"global","enabled":true}`,
+			400,
+			"subject_id, scope_type, and scope_id are required",
+		},
+		{
+			"invalid scope_type",
+			`{"subject_id":"user1","scope_type":"invalid","scope_id":"default","enabled":true}`,
+			400,
+			"invalid scope_type, expected: global, space, org, project",
+		},
+		{
+			"missing enabled",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","timeout_ms":5000}`,
+			400,
+			"enabled is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("PUT", "/v1/speech/local-config",
+				strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.want {
+				t.Errorf("expected %d, got %d: %s", tt.want, w.Code, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			json.Unmarshal(w.Body.Bytes(), &resp)
+			if resp["msg"] != tt.msg {
+				t.Errorf("expected msg %q, got %v", tt.msg, resp["msg"])
+			}
+		})
+	}
+}
+
+func TestLocalConfigHandler_GetValidation(t *testing.T) {
+	r, _ := setupLocalConfigRouter()
+
+	tests := []struct {
+		name string
+		url  string
+		want int
+		msg  string
+	}{
+		{
+			"missing all params",
+			"/v1/speech/local-config",
+			400,
+			"subject_id, scope_type, and scope_id are required",
+		},
+		{
+			"missing scope_type",
+			"/v1/speech/local-config?subject_id=u1&scope_id=s1",
+			400,
+			"subject_id, scope_type, and scope_id are required",
+		},
+		{
+			"missing scope_id",
+			"/v1/speech/local-config?subject_id=u1&scope_type=global",
+			400,
+			"subject_id, scope_type, and scope_id are required",
+		},
+		{
+			"invalid scope_type",
+			"/v1/speech/local-config?subject_id=u1&scope_type=bad&scope_id=s1",
+			400,
+			"invalid scope_type, expected: global, space, org, project",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("GET", tt.url, nil)
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.want {
+				t.Errorf("expected %d, got %d: %s", tt.want, w.Code, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			json.Unmarshal(w.Body.Bytes(), &resp)
+			if resp["msg"] != tt.msg {
+				t.Errorf("expected msg %q, got %v", tt.msg, resp["msg"])
+			}
+		})
+	}
+}
+
+func TestLocalConfigHandler_GetDefaultValues(t *testing.T) {
+	cfg := &config.Config{
+		LocalEnabled:       false,
+		LocalTimeoutMs:     10000,
+		LocalProbeURL:      "http://localhost:8787/",
+		LocalTranscribeURL: "http://localhost:8787/v1/voice/transcribe",
+	}
+	localStore := store.NewLocalConfigStore(nil, cfg)
+	h := NewLocalConfigHandler(localStore)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("app_id", "")
+		c.Next()
+	})
+	r.GET("/v1/speech/local-config", h.Get)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/v1/speech/local-config?subject_id=u1&scope_type=global&scope_id=default", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	if resp["enabled"] != false {
+		t.Errorf("expected enabled false, got %v", resp["enabled"])
+	}
+	if resp["timeout_ms"] != float64(10000) {
+		t.Errorf("expected timeout_ms 10000, got %v", resp["timeout_ms"])
+	}
+	if resp["probe_url"] != "http://localhost:8787/" {
+		t.Errorf("expected default probe_url, got %v", resp["probe_url"])
+	}
+	if resp["transcribe_url"] != "http://localhost:8787/v1/voice/transcribe" {
+		t.Errorf("expected default transcribe_url, got %v", resp["transcribe_url"])
+	}
+}
+
+func TestLocalConfigHandler_DeleteValidation(t *testing.T) {
+	r, _ := setupLocalConfigRouter()
+
+	tests := []struct {
+		name string
+		url  string
+		want int
+		msg  string
+	}{
+		{
+			"missing all params",
+			"/v1/speech/local-config",
+			400,
+			"subject_id, scope_type, and scope_id are required",
+		},
+		{
+			"missing subject_id",
+			"/v1/speech/local-config?scope_type=global&scope_id=default",
+			400,
+			"subject_id, scope_type, and scope_id are required",
+		},
+		{
+			"invalid scope_type",
+			"/v1/speech/local-config?subject_id=u1&scope_type=bad&scope_id=s1",
+			400,
+			"invalid scope_type, expected: global, space, org, project",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("DELETE", tt.url, nil)
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.want {
+				t.Errorf("expected %d, got %d: %s", tt.want, w.Code, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			json.Unmarshal(w.Body.Bytes(), &resp)
+			if resp["msg"] != tt.msg {
+				t.Errorf("expected msg %q, got %v", tt.msg, resp["msg"])
+			}
+		})
+	}
+}
+
+func TestLocalConfigHandler_PatchPartialUpdate(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want int
+	}{
+		{
+			"only timeout_ms without enabled",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","timeout_ms":5000}`,
+			400,
+		},
+		{
+			"only enabled",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","enabled":true}`,
+			200,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var r *gin.Engine
+			if tt.want == 200 {
+				var mock sqlmock.Sqlmock
+				r, mock = setupLocalConfigRouterWithMock(t)
+				mock.ExpectExec("INSERT INTO local_asr_config").
+					WillReturnResult(sqlmock.NewResult(1, 1))
+			} else {
+				r, _ = setupLocalConfigRouter()
+			}
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("PUT", "/v1/speech/local-config",
+				strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.want {
+				t.Errorf("expected %d, got %d: %s", tt.want, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestLocalConfigHandler_PatchEnabledRequired(t *testing.T) {
+	r, _ := setupLocalConfigRouter()
+
+	body := `{"subject_id":"user1","scope_type":"global","scope_id":"default","timeout_ms":5000}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("PUT", "/v1/speech/local-config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["msg"] != "enabled is required" {
+		t.Errorf("expected msg 'enabled is required', got %v", resp["msg"])
+	}
+}
+
+func TestLocalConfigHandler_TimeoutMsValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want int
+	}{
+		{
+			"timeout_ms=0",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","enabled":true,"timeout_ms":0}`,
+			400,
+		},
+		{
+			"timeout_ms=-5",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","enabled":true,"timeout_ms":-5}`,
+			400,
+		},
+		{
+			"timeout_ms=60001",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","enabled":true,"timeout_ms":60001}`,
+			400,
+		},
+		{
+			"timeout_ms=30000",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","enabled":true,"timeout_ms":30000}`,
+			200,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var r *gin.Engine
+			if tt.want == 200 {
+				var mock sqlmock.Sqlmock
+				r, mock = setupLocalConfigRouterWithMock(t)
+				mock.ExpectExec("INSERT INTO local_asr_config").
+					WillReturnResult(sqlmock.NewResult(1, 1))
+			} else {
+				r, _ = setupLocalConfigRouter()
+			}
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("PUT", "/v1/speech/local-config",
+				strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.want {
+				t.Errorf("expected %d, got %d: %s", tt.want, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestLocalConfigHandler_URLValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want int
+	}{
+		{
+			"probe_url not-a-url",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","enabled":true,"probe_url":"not-a-url"}`,
+			400,
+		},
+		{
+			"probe_url ftp scheme",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","enabled":true,"probe_url":"ftp://x"}`,
+			400,
+		},
+		{
+			"probe_url valid http",
+			`{"subject_id":"user1","scope_type":"global","scope_id":"default","enabled":true,"probe_url":"http://localhost:8787/"}`,
+			200,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var r *gin.Engine
+			if tt.want == 200 {
+				var mock sqlmock.Sqlmock
+				r, mock = setupLocalConfigRouterWithMock(t)
+				mock.ExpectExec("INSERT INTO local_asr_config").
+					WillReturnResult(sqlmock.NewResult(1, 1))
+			} else {
+				r, _ = setupLocalConfigRouter()
+			}
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("PUT", "/v1/speech/local-config",
+				strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.want {
+				t.Errorf("expected %d, got %d: %s", tt.want, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestLocalConfigHandler_GetQueryError(t *testing.T) {
+	r, mock := setupLocalConfigRouterWithMock(t)
+
+	mock.ExpectQuery("SELECT enabled, timeout_ms, probe_url, transcribe_url").
+		WillReturnError(fmt.Errorf("connection refused"))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/v1/speech/local-config?subject_id=u1&scope_type=global&scope_id=default", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["msg"] != "failed to query local config" {
+		t.Errorf("expected msg 'failed to query local config', got %v", resp["msg"])
+	}
+}
+
+func TestLocalConfigHandler_DeleteNotFound(t *testing.T) {
+	r, mock := setupLocalConfigRouterWithMock(t)
+
+	mock.ExpectExec("DELETE FROM local_asr_config").
+		WithArgs("test-app", "u1", "global", "default").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("DELETE", "/v1/speech/local-config?subject_id=u1&scope_type=global&scope_id=default", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["msg"] != "config not found" {
+		t.Errorf("expected msg 'config not found', got %v", resp["msg"])
+	}
+}
+
+func TestLocalConfigHandler_DeleteSuccess(t *testing.T) {
+	r, mock := setupLocalConfigRouterWithMock(t)
+
+	mock.ExpectExec("DELETE FROM local_asr_config").
+		WithArgs("test-app", "u1", "global", "default").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("DELETE", "/v1/speech/local-config?subject_id=u1&scope_type=global&scope_id=default", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestLocalConfigHandler_URLTooLong(t *testing.T) {
+	r, _ := setupLocalConfigRouter()
+
+	longURL := "http://example.com/" + strings.Repeat("a", 500)
+	body := fmt.Sprintf(`{"subject_id":"user1","scope_type":"global","scope_id":"default","enabled":true,"probe_url":"%s"}`, longURL)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("PUT", "/v1/speech/local-config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	msg, _ := resp["msg"].(string)
+	if !strings.Contains(msg, "500 characters") {
+		t.Errorf("expected error about 500 characters, got %v", resp["msg"])
 	}
 }

@@ -88,18 +88,20 @@ func TestIsValidScopeType(t *testing.T) {
 
 func TestLocalConfigStore_Query_DefaultValues(t *testing.T) {
 	cfg := &config.Config{
-		LocalEnabled:       true,
+		LocalEnabled:       false,
 		LocalTimeoutMs:     10000,
 		LocalProbeURL:      "http://localhost:8787/",
 		LocalTranscribeURL: "http://localhost:8787/v1/voice/transcribe",
 	}
 
-	// nil db is fine since we're testing the no-db-hit path
 	s := NewLocalConfigStore(nil, cfg)
-	result := s.Query("", "", "", "")
+	result, err := s.Query("", "", "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	if !result.Enabled {
-		t.Error("expected enabled true")
+	if result.Enabled {
+		t.Error("expected enabled false")
 	}
 	if result.TimeoutMs != 10000 {
 		t.Errorf("expected timeout 10000, got %d", result.TimeoutMs)
