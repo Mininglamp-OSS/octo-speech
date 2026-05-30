@@ -2,7 +2,7 @@ name: Octo PR Feed
 
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] metadata-only automation; no PR code executed
-    types: [opened, closed, reopened]
+    types: [opened]
     branches: [main]
 
 permissions: {}
@@ -22,6 +22,6 @@ jobs:
       pr_deletions: ${{ github.event.pull_request.deletions }}
       pr_changed_files: ${{ github.event.pull_request.changed_files }}
       event_action: ${{ github.event.action }}
-      project_group_id: '1f5bb61462de4af7842d05f83214db37'
+      project_group_id: 'e0a513e440724af79402dd7021999c67'
     secrets:
       OCTO_BOT_TOKEN: ${{ secrets.OCTO_BOT_TOKEN }}
