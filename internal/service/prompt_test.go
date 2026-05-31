@@ -47,6 +47,30 @@ func TestBuildSystemMessage_SkipMention(t *testing.T) {
 	}
 }
 
+func TestBuildSystemMessage_BroadcastMention(t *testing.T) {
+	ResetPromptsToDefaults()
+	msg := BuildSystemMessage(true, false)
+
+	if !strings.Contains(msg, "### 广播 @mention") {
+		t.Error("expected broadcast mention section in system message")
+	}
+	if !strings.Contains(msg, "@所有人") {
+		t.Error("expected @所有人 broadcast token guidance")
+	}
+	if !strings.Contains(msg, "@所有AI") {
+		t.Error("expected @所有AI broadcast token guidance")
+	}
+}
+
+func TestBuildSystemMessage_SkipBroadcastMention(t *testing.T) {
+	ResetPromptsToDefaults()
+	msg := BuildSystemMessage(true, true)
+
+	if strings.Contains(msg, "### 广播 @mention") {
+		t.Error("expected no broadcast mention section when skipMention=true")
+	}
+}
+
 func TestBuildUserMessage_AppendNoContext(t *testing.T) {
 	ResetPromptsToDefaults()
 	msg := BuildUserMessage("append", "", "", true)
