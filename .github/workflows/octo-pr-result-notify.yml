@@ -2,7 +2,7 @@ name: Octo PR Result Notify
 
 on:
   pull_request_target:
-    types: [closed, reopened]
+    types: [closed]
   pull_request_review:
     types: [submitted]
 
@@ -18,19 +18,14 @@ jobs:
       pr_title: ${{ github.event.pull_request.title }}
       pr_url: ${{ github.event.pull_request.html_url }}
       pr_author: ${{ github.event.pull_request.user.login }}
-      event_kind: ${{ github.event.action == 'closed' && github.event.pull_request.merged == true && 'pr_merged' || github.event.action == 'closed' && 'pr_closed' || 'pr_reopened' }}
+      event_kind: ${{ github.event.pull_request.merged == true && 'pr_merged' || 'pr_closed' }}
       pr_additions: ${{ github.event.pull_request.additions }}
       pr_deletions: ${{ github.event.pull_request.deletions }}
       pr_changed_files: ${{ github.event.pull_request.changed_files }}
+      feed_group_id: ${{ vars.OCTO_PR_FEED_GROUP_ID || '1c303c142e9840f2a9b46c10b0972e8d' }}
     secrets:
       OCTO_BOT_TOKEN: ${{ secrets.OCTO_BOT_TOKEN }}
 
-  # Fork-origin PR reviews are intentionally excluded: GitHub Actions does not
-  # pass repository/org secrets to workflows triggered by pull_request_review
-  # events from forked repositories. Notifying fork PR reviews would require a
-  # workflow_run indirection which adds significant complexity for a rare case.
-  # This is a documented trade-off: only reviews on PRs from the same repository
-  # (i.e. branches, not forks) will be broadcast to the pr-feed group.
   review-result:
     if: >-
       github.event_name == 'pull_request_review' &&
@@ -45,5 +40,6 @@ jobs:
       pr_author: ${{ github.event.pull_request.user.login }}
       event_kind: ${{ github.event.review.state == 'approved' && 'review_approved' || 'review_changes_requested' }}
       reviewer: ${{ github.event.review.user.login }}
+      feed_group_id: ${{ vars.OCTO_PR_FEED_GROUP_ID || '1c303c142e9840f2a9b46c10b0972e8d' }}
     secrets:
       OCTO_BOT_TOKEN: ${{ secrets.OCTO_BOT_TOKEN }}
