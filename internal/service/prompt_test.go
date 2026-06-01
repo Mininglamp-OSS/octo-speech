@@ -60,6 +60,9 @@ func TestBuildSystemMessage_BroadcastMention(t *testing.T) {
 	if !strings.Contains(msg, "@所有AI") {
 		t.Error("expected @所有AI broadcast token guidance")
 	}
+	if strings.Contains(msg, "@所有 AI") {
+		t.Error("broadcast token must be atomic: @所有AI must never contain a space (@所有 AI)")
+	}
 }
 
 func TestBuildSystemMessage_SkipBroadcastMention(t *testing.T) {
