@@ -82,7 +82,7 @@ func (s *TranscribeService) Transcribe(audioData []byte, mimeType, contextText, 
 	userMsg := BuildUserMessage(mode, contextText, chatContext, emotionEmoji)
 	var systemMsg string
 	if engine != config.EngineGPT {
-		systemMsg = BuildSystemMessage(emotionEmoji, opts.SkipMention)
+		systemMsg = BuildSystemMessage(emotionEmoji, opts.SkipMention, mode)
 	}
 
 	var rawText, model string
@@ -258,6 +258,7 @@ func (s *TranscribeService) callGPTWithModelFallback(audioData []byte, mimeType,
 func (s *TranscribeService) callChatCompletion(totalCtx context.Context, model string, audioData []byte, mimeType, systemMsg, userMsg, engine string) (string, interface{}, error) {
 	b64Audio := base64.StdEncoding.EncodeToString(audioData)
 
+	// qwen3.5-omni-plus requires data URI prefix
 	if engine == config.EngineQwen {
 		b64Audio = "data:;base64," + b64Audio
 	}

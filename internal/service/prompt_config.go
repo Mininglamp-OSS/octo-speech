@@ -10,6 +10,8 @@ import (
 
 type PromptConfig struct {
 	System                   string `yaml:"system"`
+	SystemAppendOnly         string `yaml:"system_append_only"`
+	SystemEditOnly           string `yaml:"system_edit_only"`
 	VocabularyReference      string `yaml:"vocabulary_reference"`
 	AppendInputBuffer        string `yaml:"append_input_buffer"`
 	AppendInputBufferNoVocab string `yaml:"append_input_buffer_no_vocab"`
@@ -44,6 +46,8 @@ func init() {
 func ResetPromptsToDefaults() {
 	activePrompts = PromptConfig{
 		System:                   systemPromptTemplate,
+		SystemAppendOnly:         systemPromptAppendOnly,
+		SystemEditOnly:           systemPromptEditOnly,
 		VocabularyReference:      vocabularyReferenceTemplate,
 		AppendInputBuffer:        appendInputBufferTemplate,
 		AppendInputBufferNoVocab: appendInputBufferNoVocabTemplate,
@@ -117,6 +121,12 @@ func LoadPrompts(filePath string, logger *zap.Logger) {
 			logger.Warn("custom system prompt lacks {{RULE5_TITLE}} placeholder; emotion toggle will not affect system message",
 				zap.String("path", filePath))
 		}
+	}
+	if strings.TrimSpace(cfg.SystemAppendOnly) != "" {
+		activePrompts.SystemAppendOnly = strings.TrimRight(cfg.SystemAppendOnly, "\r\n")
+	}
+	if strings.TrimSpace(cfg.SystemEditOnly) != "" {
+		activePrompts.SystemEditOnly = strings.TrimRight(cfg.SystemEditOnly, "\r\n")
 	}
 
 	templateFields := []struct {
