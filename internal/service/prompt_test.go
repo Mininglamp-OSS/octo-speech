@@ -95,6 +95,33 @@ func TestBuildSystemMessage_EditOnlySkipMention(t *testing.T) {
 	}
 }
 
+func TestBuildSystemMessage_EditOnlyWithEmotion(t *testing.T) {
+	ResetPromptsToDefaults()
+	msg := BuildSystemMessage(true, false, "edit_only")
+
+	if !strings.Contains(msg, "### 规则 5：情绪标注") {
+		t.Error("expected emotion annotation rule (rule 5) in edit_only system message when emotion enabled")
+	}
+	if !strings.Contains(msg, "情绪标注（⚠️ 必须执行）") {
+		t.Error("expected emotion annotation section body in edit_only system message when emotion enabled")
+	}
+}
+
+func TestBuildSystemMessage_EditOnlyNoEmotion(t *testing.T) {
+	ResetPromptsToDefaults()
+	msg := BuildSystemMessage(false, false, "edit_only")
+
+	// When emotion is disabled, the entire rule 5 (heading + intro + section)
+	// must be gone, not just the placeholder body. Guards against regression
+	// where the rule 5 heading/intro was hardcoded in systemPromptEditOnly.
+	if strings.Contains(msg, "### 规则 5：情绪标注") {
+		t.Error("expected no emotion annotation rule (rule 5) in edit_only when emotion disabled")
+	}
+	if strings.Contains(msg, "情绪标注（⚠️ 必须执行）") {
+		t.Error("expected no emotion annotation section in edit_only when emotion disabled")
+	}
+}
+
 func TestBuildSystemMessage_FallbackToCustomSystem(t *testing.T) {
 	ResetPromptsToDefaults()
 	activePrompts.System = "custom system prompt"
