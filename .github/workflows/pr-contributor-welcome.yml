@@ -14,7 +14,7 @@ permissions: {}
 
 jobs:
   welcome:
-    uses: Mininglamp-OSS/.github/.github/workflows/reusable-pr-contributor-welcome.yml@main
+    uses: Mininglamp-OSS/.github/.github/workflows/reusable-pr-contributor-welcome.yml@v1
     permissions:
       issues: write
       pull-requests: write
