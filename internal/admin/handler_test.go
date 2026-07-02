@@ -353,7 +353,7 @@ func TestCSRFMiddleware_ConstantTimeCompare(t *testing.T) {
 		c.String(200, "ok")
 	})
 
-	token := "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+	token := "test-csrf-token-placeholder-0000"
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/test", nil)

@@ -75,7 +75,7 @@ func TestGenerateAppID_Base62Chars(t *testing.T) {
 }
 
 func TestHashAPIKey(t *testing.T) {
-	key := "sk-xK9mB2nR4pL7qW1sAbCdEfGhIjKlM"
+	key := "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 	hash := hashAPIKey(key)
 
 	if len(hash) != 64 {
